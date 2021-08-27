@@ -21,8 +21,13 @@ func NewOptions(v *viper.Viper) (*consulApi.Config, error) {
 	return o, nil
 }
 
+type Client struct {
+	Config *consulApi.Config
+	Client *consulApi.Client
+}
+
 // New
-func New(o *consulApi.Config, logger *zap.Logger) (*consulApi.Client, error) {
+func New(o *consulApi.Config, logger *zap.Logger) (*Client, error) {
 
 	// initialize consul
 	var (
@@ -39,7 +44,12 @@ func New(o *consulApi.Config, logger *zap.Logger) (*consulApi.Client, error) {
 		return nil, errors.Wrap(err, "create consul client error")
 	}
 
-	return consulCli, nil
+	c := &Client{
+		Config: o,
+		Client: consulCli,
+	}
+
+	return c, nil
 }
 
 var ProviderSet = wire.NewSet(New, NewOptions)
