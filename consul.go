@@ -21,6 +21,7 @@ func NewOptions(v *viper.Viper) (*consulApi.Config, error) {
 	return o, nil
 }
 
+// Client
 type Client struct {
 	Config *consulApi.Config
 	Client *consulApi.Client
