@@ -5,7 +5,6 @@ import (
 	consulApi "github.com/hashicorp/consul/api"
 	"github.com/pkg/errors"
 	"github.com/spf13/viper"
-	"go.uber.org/zap"
 )
 
 // NewOptions
@@ -28,7 +27,7 @@ type Client struct {
 }
 
 // New
-func New(o *consulApi.Config, logger *zap.Logger) (*Client, error) {
+func New(o *consulApi.Config) (*Client, error) {
 
 	// initialize consul
 	var (
@@ -36,8 +35,7 @@ func New(o *consulApi.Config, logger *zap.Logger) (*Client, error) {
 		err       error
 	)
 	if o.Address == "" {
-		logger.Warn("The consul server address is not configured, and the provider will not take effect.")
-		return nil, nil
+		return nil, errors.New("consul server address is undefined")
 	}
 
 	consulCli, err = consulApi.NewClient(o)
