@@ -1,6 +1,8 @@
 package consul
 
 import (
+	"fmt"
+
 	"github.com/google/wire"
 	consulApi "github.com/hashicorp/consul/api"
 	"github.com/pkg/errors"
@@ -49,6 +51,37 @@ func New(o *consulApi.Config) (*Client, error) {
 	}
 
 	return c, nil
+}
+
+// ServiceRegister
+func (p *Client) ServiceRegister(id, name, addr string, port int,
+	tags []string, meta map[string]string) error {
+	check := &consulApi.AgentServiceCheck{
+		Interval:                       "10s",
+		DeregisterCriticalServiceAfter: "60m",
+		TCP:                            fmt.Sprintf("%s:%d", addr, port),
+	}
+	svcReg := &consulApi.AgentServiceRegistration{
+		ID:                id,
+		Name:              name,
+		Tags:              []string{"grpc"},
+		Port:              port,
+		Address:           addr,
+		EnableTagOverride: true,
+		Check:             check,
+		Checks:            nil,
+	}
+
+	err := p.Client.Agent().ServiceRegister(svcReg)
+	if err != nil {
+		return err
+	}
+	return nil
+}
+
+// ServiceDeregister
+func (p *Client) ServiceDeregister(id string) error {
+	return p.Client.Agent().ServiceDeregister(id)
 }
 
 var ProviderSet = wire.NewSet(New, NewOptions)
