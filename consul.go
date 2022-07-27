@@ -14,6 +14,9 @@ import (
 	"github.com/spf13/viper"
 )
 
+// ProviderSet
+var ProviderSet = wire.NewSet(New, NewOptions)
+
 // NewOptions
 func NewOptions(v *viper.Viper) (*consulApi.Config, error) {
 	var (
@@ -113,5 +116,3 @@ func (p *Client) Resolver(ctx context.Context, service, tag string) (addr string
 	}
 	return "", fmt.Errorf("error retrieving instances from consul")
 }
-
-var ProviderSet = wire.NewSet(New, NewOptions)
