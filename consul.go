@@ -15,7 +15,7 @@ import (
 )
 
 // ProviderSet
-var ProviderSet = wire.NewSet(New, NewOptions)
+var ProviderSet = wire.NewSet(NewClient, NewOptions)
 
 // NewOptions
 func NewOptions(v *viper.Viper) (*consulApi.Config, error) {
@@ -36,8 +36,8 @@ type Client struct {
 	Client *consulApi.Client
 }
 
-// New
-func New(o *consulApi.Config) (*Client, error) {
+// NewClient
+func NewClient(ctx context.Context, o *consulApi.Config) (*Client, error) {
 
 	// initialize consul
 	var (
@@ -114,5 +114,5 @@ func (p *Client) Resolver(ctx context.Context, service, tag string) (addr string
 	for _, s := range services {
 		return fmt.Sprintf("%s:%d", s.Service.Address, s.Service.Port), nil
 	}
-	return "", fmt.Errorf("error retrieving instances from consul")
+	return "", fmt.Errorf("error retrieving instances from consul: %d", lastIndex)
 }
