@@ -3,6 +3,7 @@ package consul
 import (
 	"context"
 	"fmt"
+	"math/rand"
 	"net/url"
 	"strconv"
 
@@ -111,8 +112,15 @@ func (p *Client) Resolver(ctx context.Context, service, tag string) (addr string
 	}
 	lastIndex = metainfo.LastIndex
 
-	for _, s := range services {
-		return fmt.Sprintf("%s:%d", s.Service.Address, s.Service.Port), nil
+	// rand
+	if len(services) > 0 {
+		i := rand.Intn(len(services))
+		for k, v := range services {
+			if k == i && v.Service.Address != "" {
+				return fmt.Sprintf("%s:%d/%s", v.Service.Address, v.Service.Port, v.Service.Service), nil
+			}
+		}
 	}
-	return "", fmt.Errorf("error retrieving instances from consul: %d", lastIndex)
+
+	return "", fmt.Errorf("error retrieving instances from consul: %s, %s", service, tag)
 }
