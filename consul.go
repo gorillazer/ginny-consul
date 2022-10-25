@@ -6,6 +6,7 @@ import (
 	"math/rand"
 	"net/url"
 	"strconv"
+	"time"
 
 	"github.com/duke-git/lancet/cryptor"
 	"github.com/google/wire"
@@ -13,10 +14,14 @@ import (
 	consulApi "github.com/hashicorp/consul/api"
 	"github.com/pkg/errors"
 	"github.com/spf13/viper"
+	"golang.org/x/sync/syncmap"
 )
 
 // ProviderSet
-var ProviderSet = wire.NewSet(NewClient, NewOptions)
+var (
+	ProviderSet = wire.NewSet(NewClient, NewOptions)
+	NodeMap     = syncmap.Map{}
+)
 
 // NewOptions
 func NewOptions(v *viper.Viper) (*consulApi.Config, error) {
@@ -38,13 +43,17 @@ type Client struct {
 }
 
 // NewClient
-func NewClient(ctx context.Context, o *consulApi.Config) (*Client, error) {
-
+func NewClient(ctx context.Context, dsn string) (*Client, error) {
 	// initialize consul
 	var (
 		consulCli *consulApi.Client
 		err       error
 	)
+	o, err := parseConfig(dsn)
+	if err != nil {
+		return nil, err
+	}
+
 	if o.Address == "" {
 		return nil, errors.New("consul server address is undefined")
 	}
@@ -62,8 +71,28 @@ func NewClient(ctx context.Context, o *consulApi.Config) (*Client, error) {
 	return c, nil
 }
 
+// parseConfig
+func parseConfig(dsn string) (*consulApi.Config, error) {
+	o := consulApi.DefaultConfig()
+
+	u, err := url.Parse(dsn)
+	if err != nil {
+		return nil, err
+	}
+	o.Address = u.Host
+	user := u.Query().Get("username")
+	password := u.Query().Get("password")
+	if user != "" || password != "" {
+		o.HttpAuth = &consulApi.HttpBasicAuth{
+			Username: user,
+			Password: password,
+		}
+	}
+	return o, nil
+}
+
 // ServiceRegister
-func (p *Client) ServiceRegister(service, addr string, tags []string, meta map[string]string) error {
+func (p *Client) ServiceRegister(ctx context.Context, service, addr string, tags []string, meta map[string]string) error {
 	u, err := url.Parse(addr)
 	if err != nil {
 		return err
@@ -73,17 +102,18 @@ func (p *Client) ServiceRegister(service, addr string, tags []string, meta map[s
 		DeregisterCriticalServiceAfter: "60m",
 		TCP:                            u.Host,
 	}
-	id := cryptor.Md5String(service)
+	id := cryptor.Md5String(addr)
 	port, err := strconv.Atoi(u.Port())
 	if err != nil {
 		return err
 	}
+
 	svcReg := &consulApi.AgentServiceRegistration{
 		ID:                id,
 		Name:              service,
 		Tags:              tags,
 		Port:              int(port),
-		Address:           u.Hostname(),
+		Address:           u.Scheme + "://" + u.Hostname(),
 		EnableTagOverride: true,
 		Check:             check,
 		Checks:            nil,
@@ -103,24 +133,75 @@ func (p *Client) ServiceDeregister(service string) error {
 
 // Resolver
 func (p *Client) Resolver(ctx context.Context, service, tag string) (addr string, err error) {
-	var lastIndex uint64
-	services, metainfo, err := p.Client.Health().Service(service, tag, true, &api.QueryOptions{
-		WaitIndex: lastIndex,
-	})
-	if err != nil {
-		return "", err
+	// key := cryptor.Md5String(fmt.Sprintf("%s%s", service, tag))
+	key := fmt.Sprintf("%s-%s", service, tag)
+
+	var (
+		flag  = false
+		nodes = []*consulApi.AgentService{}
+	)
+	data, ok := NodeMap.Load(key)
+	if !ok {
+		flag = true
 	}
-	lastIndex = metainfo.LastIndex
+	if n, ok := data.([]*consulApi.AgentService); ok {
+		nodes = n
+	} else {
+		flag = true
+	}
+	if flag || len(nodes) == 0 {
+		nodes, err = p.loadNodes(ctx, key, service, tag)
+		if err != nil {
+			return "", err
+		}
+		p.hotReloadNodes(ctx, key, service, tag)
+	}
 
 	// rand
-	if len(services) > 0 {
-		i := rand.Intn(len(services))
-		for k, v := range services {
-			if k == i && v.Service.Address != "" {
-				return fmt.Sprintf("%s:%d/%s", v.Service.Address, v.Service.Port, v.Service.Service), nil
+	if len(nodes) > 0 {
+		i := rand.Intn(len(nodes))
+		for k, v := range nodes {
+			if k == i && v.Address != "" {
+				return fmt.Sprintf("%s:%d/%s", v.Address, v.Port, v.Service), nil
 			}
 		}
 	}
 
 	return "", fmt.Errorf("error retrieving instances from consul: %s, %s", service, tag)
+}
+
+// loadNodes ...
+func (p *Client) loadNodes(ctx context.Context, key, service, tag string) ([]*consulApi.AgentService, error) {
+	var lastIndex uint64
+	services, metainfo, err := p.Client.Health().Service(service, tag, true, &api.QueryOptions{
+		WaitIndex: lastIndex,
+	})
+	if err != nil {
+		return nil, err
+	}
+	lastIndex = metainfo.LastIndex
+
+	nodes := []*consulApi.AgentService{}
+	for _, v := range services {
+		if v.Service != nil {
+			nodes = append(nodes, v.Service)
+		}
+	}
+	NodeMap.Store(key, nodes)
+	return nodes, nil
+}
+
+// hotReloadNodes ...
+func (p *Client) hotReloadNodes(ctx context.Context, key, service, tag string) {
+	pCtx, cancel := context.WithCancel(ctx)
+	defer cancel()
+	go func(c context.Context, k, s, t string) {
+		for range time.NewTicker(time.Second * 30).C {
+			_, err := p.loadNodes(c, k, s, t)
+			if err != nil {
+				// fmt.Println(time.Now(), "load nodes error", err)
+				continue
+			}
+		}
+	}(pCtx, key, service, tag)
 }
