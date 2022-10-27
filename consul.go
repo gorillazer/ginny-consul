@@ -3,12 +3,12 @@ package consul
 import (
 	"context"
 	"fmt"
-	"math/rand"
 	"net/url"
 	"strconv"
 	"time"
 
 	"github.com/duke-git/lancet/cryptor"
+	"github.com/duke-git/lancet/random"
 	"github.com/google/wire"
 	"github.com/hashicorp/consul/api"
 	consulApi "github.com/hashicorp/consul/api"
@@ -132,7 +132,7 @@ func (p *Client) ServiceDeregister(service string) error {
 }
 
 // Resolver
-func (p *Client) Resolver(ctx context.Context, service, tag string) (addr string, err error) {
+func (p *Client) Resolver(ctx context.Context, service, tag string) (sev *consulApi.AgentService, err error) {
 	// key := cryptor.Md5String(fmt.Sprintf("%s%s", service, tag))
 	key := fmt.Sprintf("%s-%s", service, tag)
 
@@ -152,22 +152,22 @@ func (p *Client) Resolver(ctx context.Context, service, tag string) (addr string
 	if flag || len(nodes) == 0 {
 		nodes, err = p.loadNodes(ctx, key, service, tag)
 		if err != nil {
-			return "", err
+			return nil, err
 		}
 		p.hotReloadNodes(ctx, key, service, tag)
 	}
 
 	// rand
 	if len(nodes) > 0 {
-		i := rand.Intn(len(nodes))
+		i := random.RandInt(0, len(nodes))
 		for k, v := range nodes {
 			if k == i && v.Address != "" {
-				return fmt.Sprintf("%s:%d/%s", v.Address, v.Port, v.Service), nil
+				return v, nil
 			}
 		}
 	}
 
-	return "", fmt.Errorf("error retrieving instances from consul: %s, %s", service, tag)
+	return nil, fmt.Errorf("error retrieving instances from consul: %s, %s", service, tag)
 }
 
 // loadNodes ...
@@ -196,7 +196,7 @@ func (p *Client) hotReloadNodes(ctx context.Context, key, service, tag string) {
 	pCtx, cancel := context.WithCancel(ctx)
 	defer cancel()
 	go func(c context.Context, k, s, t string) {
-		for range time.NewTicker(time.Second * 30).C {
+		for range time.NewTicker(time.Second * 10).C {
 			_, err := p.loadNodes(c, k, s, t)
 			if err != nil {
 				// fmt.Println(time.Now(), "load nodes error", err)
