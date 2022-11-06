@@ -132,9 +132,8 @@ func (p *Client) ServiceDeregister(service string) error {
 }
 
 // Resolver
-func (p *Client) Resolver(ctx context.Context, service, tag string) (sev *consulApi.AgentService, err error) {
-	// key := cryptor.Md5String(fmt.Sprintf("%s%s", service, tag))
-	key := fmt.Sprintf("%s-%s", service, tag)
+func (p *Client) Resolver(ctx context.Context, service, tag string) (addr string, err error) {
+	key := fmt.Sprintf("%s.%s", service, tag)
 
 	var (
 		flag  = false
@@ -152,7 +151,7 @@ func (p *Client) Resolver(ctx context.Context, service, tag string) (sev *consul
 	if flag || len(nodes) == 0 {
 		nodes, err = p.loadNodes(ctx, key, service, tag)
 		if err != nil {
-			return nil, err
+			return "", err
 		}
 		p.hotReloadNodes(ctx, key, service, tag)
 	}
@@ -162,12 +161,12 @@ func (p *Client) Resolver(ctx context.Context, service, tag string) (sev *consul
 		i := random.RandInt(0, len(nodes))
 		for k, v := range nodes {
 			if k == i && v.Address != "" {
-				return v, nil
+				return fmt.Sprintf("%s:%d", v.Address, v.Port), nil
 			}
 		}
 	}
 
-	return nil, fmt.Errorf("error retrieving instances from consul: %s, %s", service, tag)
+	return "", fmt.Errorf("error retrieving instances from consul: %s, %s", service, tag)
 }
 
 // loadNodes ...
