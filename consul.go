@@ -127,7 +127,7 @@ func (p *Client) ServiceRegister(ctx context.Context, service, addr string, tags
 }
 
 // ServiceDeregister
-func (p *Client) ServiceDeregister(service string) error {
+func (p *Client) ServiceDeregister(ctx context.Context, service string) error {
 	return p.Client.Agent().ServiceDeregister(service)
 }
 
