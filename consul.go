@@ -43,52 +43,24 @@ type Client struct {
 }
 
 // NewClient
-func NewClient(ctx context.Context, dsn string) (*Client, error) {
+func NewClient(ctx context.Context, conf *consulApi.Config) (*Client, error) {
 	// initialize consul
 	var (
 		consulCli *consulApi.Client
 		err       error
 	)
-	o, err := parseConfig(dsn)
-	if err != nil {
-		return nil, err
-	}
 
-	if o.Address == "" {
-		return nil, errors.New("consul server address is undefined")
-	}
-
-	consulCli, err = consulApi.NewClient(o)
+	consulCli, err = consulApi.NewClient(conf)
 	if err != nil {
 		return nil, errors.Wrap(err, "create consul client error")
 	}
 
 	c := &Client{
-		Config: o,
+		Config: conf,
 		Client: consulCli,
 	}
 
 	return c, nil
-}
-
-// parseConfig
-func parseConfig(dsn string) (*consulApi.Config, error) {
-	o := consulApi.DefaultConfig()
-
-	u, err := url.Parse(dsn)
-	if err != nil {
-		return nil, err
-	}
-	o.Address = u.Host
-	user := u.Query().Get("username")
-	password := u.Query().Get("password")
-	if user != "" || password != "" {
-		o.HttpAuth = &consulApi.HttpBasicAuth{
-			Username: user,
-			Password: password,
-		}
-	}
-	return o, nil
 }
 
 // ServiceRegister
