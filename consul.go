@@ -143,14 +143,12 @@ func (p *Client) Resolver(ctx context.Context, service, tag string) (addr string
 
 // loadNodes ...
 func (p *Client) loadNodes(ctx context.Context, key, service, tag string) ([]*consulApi.AgentService, error) {
-	var lastIndex uint64
-	services, metainfo, err := p.Client.Health().Service(service, tag, true, &api.QueryOptions{
-		WaitIndex: lastIndex,
+	services, _, err := p.Client.Health().Service(service, tag, true, &api.QueryOptions{
+		WaitIndex: 0,
 	})
 	if err != nil {
 		return nil, err
 	}
-	lastIndex = metainfo.LastIndex
 
 	nodes := []*consulApi.AgentService{}
 	for _, v := range services {
