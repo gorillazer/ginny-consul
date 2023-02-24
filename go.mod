@@ -8,5 +8,6 @@ require (
 	github.com/hashicorp/consul/api v1.14.0
 	github.com/pkg/errors v0.9.1
 	github.com/spf13/viper v1.12.0
-	golang.org/x/sync v0.0.0-20220513210516-0976fa681c29
+	github.com/stretchr/testify v1.7.1
+	google.golang.org/grpc v1.46.2
 )
