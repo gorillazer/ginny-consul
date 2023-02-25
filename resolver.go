@@ -54,7 +54,7 @@ func (c *consulResolver) Resolver(ctx context.Context) (string, error) {
 	)
 	// rand
 	if len(lastReportedAddrs) == 0 {
-		opts := (&consul.QueryOptions{}).WithContext(c.ctx)
+		opts := (&consul.QueryOptions{}).WithContext(ctx)
 		lastReportedAddrs, _, err = c.query(opts)
 		if err != nil {
 			return "", fmt.Errorf("error retrieving instances from consul: %s, %v, %w", c.service, c.tags, err)
